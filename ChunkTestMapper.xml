@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="hk.org.empf.cas.contribution.repository.chunk.ChunkTestMapper">
+    <insert id="saveMaster" parameterType="hk.org.empf.cas.contribution.chunk.model.UploadChunkMaster">
+        insert into GTT_UPLOAD_CHUNK_MASTER (
+        UPLOAD_UUID,
+        FILE_TYPE,
+        CHUNK_SIZE,
+        TOTAL_CHUNKS,
+        DONE_CHUNKS,
+        STATUS_CODE,
+        CREATED_AT,
+        UPDATED_AT
+        )
+        values (
+        #{chunkMaster.uploadUuid, jdbcType=VARBINARY},
+        #{chunkMaster.fileType},
+        #{chunkMaster.chunkSize},
+        #{chunkMaster.totalChunks},
+        #{chunkMaster.doneChunks},
+        #{chunkMaster.statusCode},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <select id="selectMaster" resultType="hk.org.empf.cas.contribution.chunk.model.UploadChunkMaster">
+        select
+        UPLOAD_UUID,
+        FILE_TYPE,
+        CHUNK_SIZE,
+        TOTAL_CHUNKS,
+        DONE_CHUNKS,
+        STATUS_CODE
+        from GTT_UPLOAD_CHUNK_MASTER
+        where
+        TOTAL_CHUNKS = DONE_CHUNKS and
+        STATUS_CODE = 2
+        for update
+    </select>
+
+    <select id="selectMasterIDs" resultType="java.util.UUID">
+        with cte as (
+        select
+        UPLOAD_UUID
+        from GTT_UPLOAD_CHUNK_MASTER
+        where
+        TOTAL_CHUNKS = DONE_CHUNKS and
+        STATUS_CODE = 2
+        order by UPDATED_AT
+        ) select * from cte
+        fetch first #{limits} rows only
+    </select>
+
+    <select id="selectMasterByChunk"
+            resultType="hk.org.empf.cas.contribution.chunk.model.UploadChunkMaster">
+        select
+        x.UPLOAD_UUID,
+        x.FILE_TYPE,
+        x.CHUNK_SIZE,
+        x.TOTAL_CHUNKS,
+        x.DONE_CHUNKS,
+        x.STATUS_CODE
+        from GTT_UPLOAD_CHUNK_MASTER x
+        inner join GTT_UPLOAD_CHUNK_RECORD y
+        on x.UPLOAD_UUID = y.UPLOAD_UUID
+        where
+        x.TOTAL_CHUNKS != x.DONE_CHUNKS and
+        y.UPLOAD_CHUNK_UUID = #{chunkUuid, jdbcType=VARBINARY}
+        for update
+    </select>
+
+    <update id="updateMasterProgress">
+        update GTT_UPLOAD_CHUNK_MASTER
+        set DONE_CHUNKS = DONE_CHUNKS + 1, UPDATED_AT = CURRENT_TIMESTAMP
+        where UPLOAD_UUID = #{uploadUuid, jdbcType=VARBINARY}
+    </update>
+
+    <update id="updateMasterStatus">
+        update GTT_UPLOAD_CHUNK_MASTER
+        set STATUS_CODE = #{statusCode}, UPDATED_AT = CURRENT_TIMESTAMP
+        where UPLOAD_UUID = #{uploadUuid, jdbcType=VARBINARY}
+    </update>
+
+    <delete id="deleteMasters">
+        delete from GTT_UPLOAD_CHUNK_MASTER
+        where STATUS_CODE = 4 and CAST(CREATED_AT as DATE) <![CDATA[ <= ]]> CURRENT_DATE - #{days}
+    </delete>
+
+    <insert id="saveChunk" parameterType="hk.org.empf.cas.contribution.chunk.model.UploadChunkRecord">
+        insert into GTT_UPLOAD_CHUNK_RECORD (
+        UPLOAD_CHUNK_UUID,
+        UPLOAD_UUID,
+        CHUNK_SEQ,
+        UPLOAD_CONTENT,
+        TOTAL_RECORDS,
+        STATUS_CODE,
+        CREATED_AT,
+        UPDATED_AT
+        )
+        values (
+        #{chunkRecord.uploadChunkUuid, jdbcType=VARBINARY},
+        #{chunkRecord.uploadUuid, jdbcType=VARBINARY},
+        #{chunkRecord.chunkSeq},
+        #{chunkRecord.uploadContent, jdbcType=CLOB},
+        #{chunkRecord.totalRecords},
+        #{chunkRecord.statusCode},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <select id="selectNewChunk" resultType="hk.org.empf.cas.contribution.chunk.model.UploadChunkRecord">
+        select
+        y.UPLOAD_CHUNK_UUID,
+        y.UPLOAD_UUID,
+        y.CHUNK_SEQ,
+        y.UPLOAD_CONTENT,
+        y.TOTAL_RECORDS,
+        y.STATUS_CODE
+        from GTT_UPLOAD_CHUNK_MASTER x
+        inner join GTT_UPLOAD_CHUNK_RECORD y
+        on x.UPLOAD_UUID = y.UPLOAD_UUID
+        where
+        x.TOTAL_CHUNKS != x.DONE_CHUNKS and
+        y.STATUS_CODE = 1 and
+        y.UPLOAD_CHUNK_UUID = #{chunkUuid, jdbcType=VARBINARY}
+        for update
+    </select>
+
+    <select id="selectNewChunkIDs" resultType="java.util.UUID">
+        with cte as (
+        select
+        y.UPLOAD_CHUNK_UUID
+        from GTT_UPLOAD_CHUNK_MASTER x
+        inner join GTT_UPLOAD_CHUNK_RECORD y
+        on x.UPLOAD_UUID = y.UPLOAD_UUID
+        where
+        x.TOTAL_CHUNKS != x.DONE_CHUNKS and
+        y.STATUS_CODE = 1 and
+        x.FILE_TYPE = #{type}
+        order by x.UPDATED_AT, y.UPDATED_AT
+        ) select * from cte
+        fetch first #{limits} rows only
+    </select>
+
+    <update id="updateChunkToStarted">
+        update GTT_UPLOAD_CHUNK_RECORD
+        set STATUS_CODE = 2, UPDATED_AT = CURRENT_TIMESTAMP
+        where STATUS_CODE = 1 and UPLOAD_CHUNK_UUID = #{chunkUuid, jdbcType=VARBINARY}
+    </update>
+
+    <update id="updateChunkStatus">
+        update GTT_UPLOAD_CHUNK_RECORD
+        set STATUS_CODE = #{statusCode}, UPDATED_AT = CURRENT_TIMESTAMP
+        where UPLOAD_CHUNK_UUID = #{chunkUuid, jdbcType=VARBINARY}
+    </update>
+
+    <delete id="deleteChunks">
+        delete from GTT_UPLOAD_CHUNK_RECORD
+        where STATUS_CODE = 4 and CAST(CREATED_AT as DATE) <![CDATA[ <= ]]> CURRENT_DATE - #{days}
+    </delete>
+
+</mapper>
